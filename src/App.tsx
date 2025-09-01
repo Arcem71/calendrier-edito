@@ -115,7 +115,16 @@ function App() {
     <div className="min-h-screen bg-gray-100">
       <Toaster position="top-right" />
       
-      {/* Bouton de déconnexion discret en haut à droite */}
+      {/* Logo ARCEM en haut à gauche */}
+      <div className="absolute top-4 left-4 z-10">
+        <img 
+          src="/logo-arcem.png" 
+          alt="ARCEM Logo" 
+          className="h-24 w-auto"
+        />
+      </div>
+
+      {/* Bouton de déconnexion en haut à droite */}
       <div className="absolute top-4 right-4 z-10">
         <button
           onClick={handleSignOut}
