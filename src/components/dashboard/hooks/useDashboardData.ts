@@ -14,7 +14,15 @@ export const useDashboardData = () => {
     const storedData = localStorage.getItem('dashboardStats');
     if (storedData) {
       const data: StoredData = JSON.parse(storedData);
-      setStats(data.stats);
+      // Convertir les followers en nombres lors du chargement
+      const processedStats = {
+        ...data.stats,
+        follow_insta: Number(data.stats.follow_insta) || 0,
+        follow_facebook: Number(data.stats.follow_facebook) || 0,
+        follow_linkedin: Number(data.stats.follow_linkedin) || 0,
+        like_linkedin: Number(data.stats.like_linkedin) || 0
+      };
+      setStats(processedStats);
       setLastUpdate(new Date(data.lastUpdate));
     }
   };
@@ -197,7 +205,17 @@ export const useDashboardData = () => {
 
       const data = await response.json();
       console.log('Données reçues, traitement en cours...');
-      await saveData(data);
+      
+      // Convertir les followers en nombres pour éviter la concaténation
+      const processedData = {
+        ...data,
+        follow_insta: Number(data.follow_insta) || 0,
+        follow_facebook: Number(data.follow_facebook) || 0,
+        follow_linkedin: Number(data.follow_linkedin) || 0,
+        like_linkedin: Number(data.like_linkedin) || 0
+      };
+      
+      await saveData(processedData);
       
       toast.success('Statistiques mises à jour avec succès !', { duration: 3000 });
       console.log('✅ Mise à jour complète terminée avec succès');
@@ -242,6 +260,59 @@ export const useDashboardData = () => {
       .reduce((total, post) => total + (post.totalCount || 0), 0);
   };
 
+  const getCurrentMonthLinkedInLikes = () => {
+    if (!stats?.publication_linkedin) return 0;
+    
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+    
+    return stats.publication_linkedin
+      .filter(post => {
+        const postDate = new Date(post.created_date);
+        return postDate.getMonth() === currentMonth && 
+               postDate.getFullYear() === currentYear;
+      })
+      .reduce((total, post) => total + (post.likes || 0), 0);
+  };
+
+  const getCurrentMonthPublishedPosts = () => {
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+    
+    let totalPosts = 0;
+    
+    // Instagram posts
+    if (stats?.publication_instagram) {
+      totalPosts += stats.publication_instagram.filter(post => {
+        const postDate = new Date(post.timestamp);
+        return postDate.getMonth() === currentMonth && 
+               postDate.getFullYear() === currentYear;
+      }).length;
+    }
+    
+    // Facebook posts
+    if (stats?.publication_facebook) {
+      totalPosts += stats.publication_facebook.filter(post => {
+        const postDate = new Date(post.created_time);
+        return postDate.getMonth() === currentMonth && 
+               postDate.getFullYear() === currentYear;
+      }).length;
+    }
+    
+    // LinkedIn posts
+    if (stats?.publication_linkedin) {
+      totalPosts += stats.publication_linkedin.filter(post => {
+        const postDate = new Date(post.created_date);
+        return postDate.getMonth() === currentMonth && 
+               postDate.getFullYear() === currentYear;
+      }).length;
+    }
+    
+    return totalPosts;
+  };
+
   useEffect(() => {
     loadStoredData();
     fetchStats();
@@ -273,6 +344,8 @@ export const useDashboardData = () => {
     lastUpdate,
     fetchStats,
     getCurrentMonthInstagramLikes,
-    getCurrentMonthFacebookLikes
+    getCurrentMonthFacebookLikes,
+    getCurrentMonthLinkedInLikes,
+    getCurrentMonthPublishedPosts
   };
 };

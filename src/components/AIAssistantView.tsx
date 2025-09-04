@@ -158,12 +158,206 @@ const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({ images, initialIn
   );
 };
 
-export function AIAssistantView() {
+interface AIAssistantViewProps {
+  initialPrompt?: string;
+  autoSend?: boolean;
+  initialImages?: { url: string; filename: string }[];
+}
+
+export function AIAssistantView({ initialPrompt, autoSend = false, initialImages = [] }: AIAssistantViewProps = {}) {
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [currentId, setCurrentId] = useState<string>("");
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [initialized, setInitialized] = useState(false);
+
+  // Set initial prompt and images if provided, and auto-send if requested
+  useEffect(() => {
+    if (initialPrompt && !input) {
+      setInput(initialPrompt);
+      
+      // Set initial images if provided
+      if (initialImages.length > 0) {
+        setUploadedImages(initialImages);
+      }
+      
+      // Auto-send if requested - don't wait for initialized, create new session immediately
+      if (autoSend) {
+        // Create new session first
+        const id = uuid();
+        const initialMessage = {
+          role: "assistant" as const,
+          content: "Bonjour ! Je suis ton assistant IA. Comment puis‑je t'aider ?",
+          timestamp: Date.now()
+        };
+
+        // Create session and auto-send the message immediately
+        const createSessionAndSend = async () => {
+          try {
+            // Create new session immediately in UI (don't wait for API)
+            const newSession = {
+              id,
+              title: "Nouvelle discussion",
+              messages: [initialMessage],
+            };
+            
+            // Update UI immediately to show new session
+            setSessions(prev => [...prev, newSession]);
+            setCurrentId(id);
+            
+            // Save to database in background
+            const { error } = await supabase
+              .from('history_chat')
+              .insert({
+                session_id: id,
+                message: initialMessage
+              });
+
+            if (error) throw error;
+            
+            // Auto-send the user message immediately
+            if (initialPrompt.trim()) {
+              const text = initialPrompt.trim();
+              setInput("");
+              setLoading(true);
+
+              const userMessage = {
+                role: "user" as const,
+                content: text,
+                timestamp: Date.now(),
+                images: initialImages
+              };
+
+              try {
+                // Save user message
+                const { error: saveError } = await supabase
+                  .from('history_chat')
+                  .insert({
+                    session_id: id,
+                    message: userMessage
+                  });
+
+                if (saveError) throw saveError;
+
+                // Update session with user message
+                const updatedSession = {
+                  ...newSession,
+                  title: generateTitle(text),
+                  messages: [...newSession.messages, userMessage]
+                };
+                
+                setSessions(prev => [
+                  ...prev.filter(s => s.id !== id),
+                  updatedSession
+                ]);
+
+                // Send message to AI using the existing sendMessage function
+                const controller = new AbortController();
+                const timeout = setTimeout(() => controller.abort(), TIMEOUT_DURATION);
+
+                try {
+                  const res = await fetch(ENDPOINT, {
+                    method: "POST",
+                    headers: {
+                      "Content-Type": "application/json",
+                      Accept: "application/json, text/plain;q=0.8",
+                    },
+                    body: JSON.stringify({
+                      sessionId: id,
+                      message: text,
+                      url_images: initialImages.map(img => img.url)
+                    }),
+                    signal: controller.signal,
+                  });
+                  clearTimeout(timeout);
+
+                  if (!res.ok) throw new Error(await res.text());
+
+                  const type = res.headers.get("content-type") ?? "";
+                  let reply: string;
+
+                  if (type.includes("application/json")) {
+                    try {
+                      const data = await res.json();
+                      reply = typeof data?.message === "string" ? data.message : JSON.stringify(data);
+                    } catch {
+                      reply = await res.text();
+                    }
+                  } else {
+                    reply = await res.text();
+                  }
+
+                  const imageUrls = extractSupabaseUrls(reply);
+                  
+                  const assistantMessage = {
+                    role: "assistant" as const,
+                    content: reply,
+                    timestamp: Date.now(),
+                    images: imageUrls.map(url => ({
+                      url,
+                      filename: url.split('/').pop() || ''
+                    }))
+                  };
+
+                  // Save assistant message
+                  await supabase
+                    .from('history_chat')
+                    .insert({
+                      session_id: id,
+                      message: assistantMessage
+                    });
+                  
+                  // Update session with assistant response
+                  setSessions(prev => prev.map(s => 
+                    s.id === id 
+                      ? { ...s, messages: [...s.messages, assistantMessage] }
+                      : s
+                  ));
+                  
+                } catch (err) {
+                  const msg = err instanceof DOMException && err.name === "AbortError"
+                    ? "Temps de réponse dépassé"
+                    : err instanceof Error
+                    ? err.message
+                    : "Erreur inconnue.";
+
+                  const errorMessage = {
+                    role: "assistant" as const,
+                    content: msg,
+                    timestamp: Date.now()
+                  };
+
+                  await supabase
+                    .from('history_chat')
+                    .insert({
+                      session_id: id,
+                      message: errorMessage
+                    });
+                  
+                  setSessions(prev => prev.map(s => 
+                    s.id === id 
+                      ? { ...s, messages: [...s.messages, errorMessage] }
+                      : s
+                  ));
+                }
+                
+                setLoading(false);
+                setUploadedImages([]);
+                
+              } catch (error) {
+                console.error('Error in auto-send:', error);
+                setLoading(false);
+              }
+            }
+          } catch (error) {
+            console.error('Error creating session for auto-send:', error);
+          }
+        };
+
+        createSessionAndSend();
+      }
+    }
+  }, [initialPrompt, autoSend, initialized, initialImages]);
   const bottomRef = useRef<HTMLDivElement>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   // const [selectedFiles, setSelectedFiles] = useState<File[]>([]); // Not used - keep for future features

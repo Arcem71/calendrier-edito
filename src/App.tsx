@@ -4,11 +4,12 @@ import { DatabaseView } from './components/DatabaseView';
 import { DashboardView } from './components/DashboardView';
 import { AIAssistantView } from './components/AIAssistantView';
 import { ProspectionView } from './components/prospection/ProspectionView';
+import { IdeasView } from './components/IdeasView';
 import { LoginForm } from './components/auth/LoginForm';
 import { ContentItem, ViewMode } from './types';
 import { supabase } from './lib/supabase';
 import { useAuth } from './hooks/useAuth';
-import { CalendarDays, Database, BarChart3, Bot, Target, LogOut } from 'lucide-react';
+import { CalendarDays, Database, BarChart3, Bot, Target, Lightbulb, LogOut } from 'lucide-react';
 import { Toaster } from 'react-hot-toast';
 import toast from 'react-hot-toast';
 
@@ -19,10 +20,15 @@ import './utils/publicationScheduler';
 function App() {
   const { user, loading: authLoading, signOut, isAuthenticated } = useAuth();
   const [items, setItems] = useState<ContentItem[]>([]);
-  const [viewMode, setViewMode] = useState<ViewMode>('calendar');
+  const [viewMode, setViewMode] = useState<ViewMode>('dashboard');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
+  const [aiPrompt, setAiPrompt] = useState<string>('');
+  const [aiImages, setAiImages] = useState<{ url: string; filename: string }[]>([]);
+  const [autoSendAI, setAutoSendAI] = useState<boolean>(false);
+  const [ideas, setIdeas] = useState<any[]>([]);
+  const [selectedIdeaId, setSelectedIdeaId] = useState<string | null>(null);
 
   const fetchItems = async (showLoading = false) => {
     try {
@@ -71,13 +77,27 @@ function App() {
   useEffect(() => {
     if (isAuthenticated) {
       fetchItems(true);
+      fetchIdeas();
     }
   }, [isAuthenticated]);
+
+  const fetchIdeas = async () => {
+    try {
+      const storedIdeas = localStorage.getItem('socialMediaIdeas');
+      const parsedIdeas = storedIdeas ? JSON.parse(storedIdeas) : [];
+      setIdeas(parsedIdeas);
+    } catch (error) {
+      console.error('Error fetching ideas:', error);
+    }
+  };
 
   const handleViewChange = (newMode: ViewMode) => {
     setViewMode(newMode);
     if (newMode !== 'prospection') {
       fetchItems(false);
+    }
+    if (newMode === 'calendar') {
+      fetchIdeas(); // Rafraîchir les idées pour la vue calendrier
     }
   };
 
@@ -205,6 +225,18 @@ function App() {
               <Target className="w-5 h-5" />
               Prospection
             </button>
+            <button
+              onClick={() => handleViewChange('ideas')}
+              className={`
+                px-4 py-2 rounded-lg flex items-center gap-2 transition-all duration-200
+                ${viewMode === 'ideas'
+                  ? 'bg-blue-500 text-white shadow-lg'
+                  : 'bg-white text-gray-700 hover:bg-gray-50 hover:shadow-md'}
+              `}
+            >
+              <Lightbulb className="w-5 h-5" />
+              Idées
+            </button>
           </div>
         </div>
 
@@ -231,13 +263,37 @@ function App() {
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
           </div>
         ) : viewMode === 'calendar' ? (
-          <CalendarView items={items} onUpdate={() => fetchItems(false)} />
+          <CalendarView 
+            items={items} 
+            ideas={ideas}
+            onUpdate={() => fetchItems(false)}
+            onIdeaClick={(ideaId) => {
+              setSelectedIdeaId(ideaId);
+              setViewMode('ideas');
+            }}
+          />
         ) : viewMode === 'database' ? (
           <DatabaseView items={items} onUpdate={() => fetchItems(false)} />
         ) : viewMode === 'ai' ? (
-          <AIAssistantView />
+          <AIAssistantView 
+            initialPrompt={aiPrompt} 
+            autoSend={autoSendAI}
+            initialImages={aiImages}
+          />
         ) : viewMode === 'prospection' ? (
           <ProspectionView />
+        ) : viewMode === 'ideas' ? (
+          <IdeasView 
+            selectedIdeaId={selectedIdeaId}
+            onOpenAI={(prompt, images = []) => {
+              setAiPrompt(prompt);
+              setAiImages(images);
+              setAutoSendAI(true);
+              setViewMode('ai');
+              // Reset auto-send after a delay to avoid auto-sending on subsequent visits
+              setTimeout(() => setAutoSendAI(false), 1000);
+            }} 
+          />
         ) : (
           <DashboardView />
         )}

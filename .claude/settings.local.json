@@ -7,7 +7,15 @@
       "Bash(npx vite build:*)",
       "Bash(lsof:*)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(cp:*)",
+      "Bash(mkdir:*)",
+      "Bash(npx supabase:*)",
+      "Bash(npm run build:*)",
+      "Read(/Users/enzolarue/Downloads/project/**)",
+      "Read(/Users/enzolarue/Downloads/project/**)",
+      "Bash(npx tsc:*)"
     ],
     "deny": [],
     "ask": []

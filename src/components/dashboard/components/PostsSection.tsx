@@ -3,6 +3,7 @@ import { Instagram, Facebook, Linkedin, ThumbsUp, MessageSquare, Calendar, Exter
 import { SocialStats } from '../types';
 import { handleSocialLinkClick, handlePostClick } from '../utils/socialLinks';
 import { formatDate } from '../utils/dateUtils';
+import { LinkedInMediaPreview } from './LinkedInMediaPreview';
 
 interface PostsSectionProps {
   stats: SocialStats | null;
@@ -211,36 +212,8 @@ export const PostsSection: React.FC<PostsSectionProps> = ({ stats }) => {
               onClick={() => post.post_url && handlePostClick(post.post_url)}
             >
               <div className="flex gap-4">
-                {/* Afficher l'image (qu'elle vienne de media ou d'un document PDF converti) */}
-                {post.media?.items?.[0]?.url && (
-                  <div className="flex-shrink-0 relative">
-                    <div className="w-20 h-20 rounded-xl overflow-hidden bg-gray-100 group-hover:shadow-lg transition-all duration-200">
-                      <img
-                        src={post.media.items[0].url}
-                        alt={`Post LinkedIn ${idx + 1}`}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
-                        onError={(e) => {
-                          const target = e.target as HTMLImageElement;
-                          target.src = 'https://placehold.co/80x80?text=?';
-                        }}
-                      />
-                    </div>
-                    <div className="absolute -top-1 -right-1 w-5 h-5 bg-blue-600 rounded-full flex items-center justify-center">
-                      <ImageIcon className="w-3 h-3 text-white" />
-                    </div>
-                  </div>
-                )}
-                {/* Si c'est un document non-PDF, afficher une icône */}
-                {post.document?.url && !post.media?.items?.[0]?.url && (
-                  <div className="flex-shrink-0 relative">
-                    <div className="w-20 h-20 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-xl flex items-center justify-center group-hover:shadow-lg transition-all duration-200">
-                      <div className="text-center">
-                        <div className="text-2xl mb-1">📄</div>
-                        <div className="text-xs text-blue-600 font-medium">PDF</div>
-                      </div>
-                    </div>
-                  </div>
-                )}
+                {/* Utiliser le composant LinkedInMediaPreview pour gérer tous les types de médias */}
+                <LinkedInMediaPreview post={post} index={idx} />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm text-gray-700 line-clamp-2 mb-3 group-hover:text-gray-900 transition-colors">
                     {post.text || "💼 Publication LinkedIn"}

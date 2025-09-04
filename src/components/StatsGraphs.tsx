@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState } from 'react';
 import {
   LineChart,
   Line,
@@ -9,8 +9,8 @@ import {
   Legend,
   ResponsiveContainer
 } from 'recharts';
-import { ChevronDown } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { ChevronDown, RefreshCw } from 'lucide-react';
+import { useAutomaticStats } from '../hooks/useAutomaticStats';
 
 interface MonthlyStats {
   month: string;
@@ -29,19 +29,6 @@ interface Platform {
   likesKey: keyof MonthlyStats;
 }
 
-interface CurrentStats {
-  follow_insta: number;
-  publication_instagram: Array<{ like_count: number }>;
-  follow_facebook: number;
-  publication_facebook: Array<{ totalCount: number }>;
-  follow_linkedin: number;
-  like_linkedin: number;
-}
-
-interface StoredData {
-  stats: CurrentStats;
-  lastUpdate: string;
-}
 
 const platforms: Platform[] = [
   {
@@ -65,165 +52,19 @@ const platforms: Platform[] = [
 ];
 
 export function StatsGraphs() {
-  const [data, setData] = useState<MonthlyStats[]>([]);
+  const { data, loading, error, forceUpdate } = useAutomaticStats();
   const [selectedPlatform, setSelectedPlatform] = useState<string>('Tous');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [updating, setUpdating] = useState(false);
 
-  const getCurrentMonthStats = async () => {
+  const handleForceUpdate = async () => {
+    setUpdating(true);
     try {
-      const storedData = localStorage.getItem('dashboardStats');
-      if (!storedData) return null;
-
-      const { stats } = JSON.parse(storedData);
-      
-      // Calculate total likes for the current month
-      const instagramLikes = stats.publication_instagram?.reduce((total: number, post: any) => {
-        const postDate = new Date(post.timestamp);
-        const now = new Date();
-        if (postDate.getMonth() === now.getMonth() && postDate.getFullYear() === now.getFullYear()) {
-          return total + (post.like_count || 0);
-        }
-        return total;
-      }, 0);
-
-      const facebookLikes = stats.publication_facebook?.reduce((total: number, post: any) => {
-        const postDate = new Date(post.created_time);
-        const now = new Date();
-        if (postDate.getMonth() === now.getMonth() && postDate.getFullYear() === now.getFullYear()) {
-          return total + (post.totalCount || 0);
-        }
-        return total;
-      }, 0);
-
-      const now = new Date();
-      return {
-        month: new Date(now.getFullYear(), now.getMonth(), 1).toLocaleDateString('fr-FR', { 
-          month: 'short'
-        }),
-        instagram_followers: stats.follow_insta || 0,
-        instagram_likes: instagramLikes || 0,
-        facebook_followers: stats.follow_facebook || 0,
-        facebook_likes: facebookLikes || 0,
-        linkedin_followers: stats.follow_linkedin || 0,
-        linkedin_likes: stats.like_linkedin || 0
-      };
-    } catch (error) {
-      console.error('Error getting current month stats:', error);
-      return null;
+      await forceUpdate();
+    } finally {
+      setUpdating(false);
     }
   };
-
-  const saveMonthlyStats = async (stats: MonthlyStats) => {
-    try {
-      const date = new Date();
-      const firstDayOfMonth = new Date(date.getFullYear(), date.getMonth(), 1);
-      
-      const { error } = await supabase
-        .from('social_media_stats')
-        .upsert({
-          month: firstDayOfMonth.toISOString().split('T')[0],
-          instagram_followers: stats.instagram_followers,
-          instagram_likes: stats.instagram_likes,
-          facebook_followers: stats.facebook_followers,
-          facebook_likes: stats.facebook_likes,
-          linkedin_followers: stats.linkedin_followers,
-          linkedin_likes: stats.linkedin_likes
-        });
-
-      if (error) throw error;
-    } catch (error) {
-      console.error('Error saving monthly stats:', error);
-    }
-  };
-
-  useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        // Fetch historical stats
-        const { data: historicalStats, error } = await supabase
-          .from('social_media_stats')
-          .select('*')
-          .order('month', { ascending: true });
-
-        if (error) throw error;
-
-        // Create a comprehensive timeline from January to December of current year
-        const currentYear = new Date().getFullYear();
-        const monthNames = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
-        
-        // Initialize all months with default data
-        const allMonthsData: MonthlyStats[] = [];
-        
-        for (let monthIndex = 0; monthIndex < 12; monthIndex++) {
-          const monthDisplay = `${monthNames[monthIndex]} ${currentYear}`;
-          
-          // Find existing data for this month
-          const existingData = historicalStats?.find(stat => {
-            const statDate = new Date(stat.month);
-            return statDate.getMonth() === monthIndex && statDate.getFullYear() === currentYear;
-          });
-          
-          allMonthsData.push({
-            month: monthDisplay,
-            instagram_followers: existingData?.instagram_followers || 0,
-            instagram_likes: existingData?.instagram_likes || 0,
-            facebook_followers: existingData?.facebook_followers || 0,
-            facebook_likes: existingData?.facebook_likes || 0,
-            linkedin_followers: existingData?.linkedin_followers || 0,
-            linkedin_likes: existingData?.linkedin_likes || 0
-          });
-        }
-
-        // Get current month stats and update the appropriate month
-        const currentStats = await getCurrentMonthStats();
-        if (currentStats) {
-          const currentDate = new Date();
-          const currentMonthIndex = currentDate.getMonth();
-          
-          // Update current month data
-          allMonthsData[currentMonthIndex] = {
-            ...allMonthsData[currentMonthIndex],
-            instagram_followers: currentStats.instagram_followers,
-            instagram_likes: currentStats.instagram_likes,
-            facebook_followers: currentStats.facebook_followers,
-            facebook_likes: currentStats.facebook_likes,
-            linkedin_followers: currentStats.linkedin_followers,
-            linkedin_likes: currentStats.linkedin_likes
-          };
-          
-          // Save current month stats if it's the last day of the month
-          const today = new Date();
-          const lastDayOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-          if (today.getDate() === lastDayOfMonth.getDate()) {
-            await saveMonthlyStats(currentStats);
-          }
-        }
-
-        setData(allMonthsData);
-      } catch (error) {
-        console.error('Error fetching stats:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchStats();
-
-    // Set up interval to check for end of month
-    const checkEndOfMonth = setInterval(async () => {
-      const now = new Date();
-      const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-      if (now.getDate() === lastDayOfMonth.getDate()) {
-        const currentStats = await getCurrentMonthStats();
-        if (currentStats) {
-          await saveMonthlyStats(currentStats);
-        }
-      }
-    }, 1000 * 60 * 60); // Check every hour
-
-    return () => clearInterval(checkEndOfMonth);
-  }, []);
 
   const getSelectedPlatforms = () => {
     if (selectedPlatform === 'Tous') {
@@ -249,49 +90,89 @@ export function StatsGraphs() {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+        <span className="ml-3 text-gray-600">Chargement des statistiques...</span>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center h-64 text-red-600">
+        <div className="text-center">
+          <p className="mb-4">Erreur lors du chargement des statistiques:</p>
+          <p className="text-sm text-gray-600 mb-4">{error}</p>
+          <button
+            onClick={handleForceUpdate}
+            disabled={updating}
+            className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50"
+          >
+            {updating ? 'Mise à jour...' : 'Réessayer'}
+          </button>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      {/* Platform Selection Dropdown */}
-      <div className="relative">
-        <button
-          onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-          className={`${getPlatformColor(selectedPlatform)} px-4 py-2 rounded-lg flex items-center gap-2`}
-        >
-          <span>{selectedPlatform}</span>
-          <ChevronDown className={`w-4 h-4 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
-        </button>
+      {/* Controls Bar */}
+      <div className="flex items-center justify-between">
+        {/* Platform Selection Dropdown */}
+        <div className="relative">
+          <button
+            onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+            className={`${getPlatformColor(selectedPlatform)} px-4 py-2 rounded-lg flex items-center gap-2`}
+          >
+            <span>{selectedPlatform}</span>
+            <ChevronDown className={`w-4 h-4 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
+          </button>
         
-        {isDropdownOpen && (
-          <div className="absolute z-10 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1">
-            <button
-              onClick={() => {
-                setSelectedPlatform('Tous');
-                setIsDropdownOpen(false);
-              }}
-              className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100"
-            >
-              Tous
-            </button>
-            {platforms.map(platform => (
+          {isDropdownOpen && (
+            <div className="absolute z-10 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1">
               <button
-                key={platform.name}
                 onClick={() => {
-                  setSelectedPlatform(platform.name);
+                  setSelectedPlatform('Tous');
                   setIsDropdownOpen(false);
                 }}
-                className={`w-full px-4 py-2 text-left text-sm hover:bg-gray-100 ${
-                  selectedPlatform === platform.name ? 'bg-gray-50' : ''
-                }`}
+                className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100"
               >
-                {platform.name}
+                Tous
               </button>
-            ))}
+              {platforms.map(platform => (
+                <button
+                  key={platform.name}
+                  onClick={() => {
+                    setSelectedPlatform(platform.name);
+                    setIsDropdownOpen(false);
+                  }}
+                  className={`w-full px-4 py-2 text-left text-sm hover:bg-gray-100 ${
+                    selectedPlatform === platform.name ? 'bg-gray-50' : ''
+                  }`}
+                >
+                  {platform.name}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Update Button */}
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleForceUpdate}
+            disabled={updating}
+            className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 flex items-center gap-2 transition-all duration-200"
+            title="Mettre à jour les statistiques maintenant"
+          >
+            <RefreshCw className={`w-4 h-4 ${updating ? 'animate-spin' : ''}`} />
+            <span className="hidden sm:inline">{updating ? 'Mise à jour...' : 'Actualiser'}</span>
+          </button>
+          
+          <div className="text-xs text-gray-500 text-right">
+            <div>Mise à jour automatique</div>
+            <div>toutes les heures</div>
           </div>
-        )}
+        </div>
       </div>
 
       {/* Graphs Container */}

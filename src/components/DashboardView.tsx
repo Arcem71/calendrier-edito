@@ -16,7 +16,9 @@ export function DashboardView() {
     lastUpdate,
     fetchStats,
     getCurrentMonthInstagramLikes,
-    getCurrentMonthFacebookLikes
+    getCurrentMonthFacebookLikes,
+    getCurrentMonthLinkedInLikes,
+    getCurrentMonthPublishedPosts
   } = useDashboardData();
   
   const scheduledCount = getScheduledPublicationCount();
@@ -62,7 +64,7 @@ export function DashboardView() {
                 </div>
                 <div>
                   <div className="text-2xl font-bold text-white">
-                    {((stats?.follow_insta || 0) + (stats?.follow_facebook || 0) + (stats?.follow_linkedin || 0)).toLocaleString()}
+                    {(Number(stats?.follow_insta || 0) + Number(stats?.follow_facebook || 0) + Number(stats?.follow_linkedin || 0)).toLocaleString()}
                   </div>
                   <div className="text-blue-100 text-sm">Total abonnés</div>
                 </div>
@@ -76,7 +78,7 @@ export function DashboardView() {
                 </div>
                 <div>
                   <div className="text-2xl font-bold text-white">
-                    {(getCurrentMonthInstagramLikes() + getCurrentMonthFacebookLikes()).toLocaleString()}
+                    {(getCurrentMonthInstagramLikes() + getCurrentMonthFacebookLikes() + getCurrentMonthLinkedInLikes()).toLocaleString()}
                   </div>
                   <div className="text-blue-100 text-sm">Interactions ce mois</div>
                 </div>
@@ -86,13 +88,13 @@ export function DashboardView() {
             <div className="bg-white bg-opacity-10 backdrop-blur-sm rounded-xl p-6 border border-white border-opacity-20">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-white bg-opacity-20 rounded-lg flex items-center justify-center">
-                  <Clock className="w-5 h-5 text-white" />
+                  <TrendingUp className="w-5 h-5 text-white" />
                 </div>
                 <div>
                   <div className="text-2xl font-bold text-white">
-                    {scheduledCount}
+                    {getCurrentMonthPublishedPosts()}
                   </div>
-                  <div className="text-blue-100 text-sm">Publications programmées</div>
+                  <div className="text-blue-100 text-sm">Publications publiées</div>
                 </div>
               </div>
             </div>
@@ -183,12 +185,20 @@ export function DashboardView() {
                   <div>
                     <div className="font-semibold text-gray-800">Plateforme la plus active</div>
                     <div className="text-sm text-gray-600">
-                      {getCurrentMonthInstagramLikes() >= getCurrentMonthFacebookLikes() ? 'Instagram' : 'Facebook'}
+                      {(() => {
+                        const insta = getCurrentMonthInstagramLikes();
+                        const fb = getCurrentMonthFacebookLikes();
+                        const linkedin = getCurrentMonthLinkedInLikes();
+                        const max = Math.max(insta, fb, linkedin);
+                        if (max === insta) return 'Instagram';
+                        if (max === fb) return 'Facebook';
+                        return 'LinkedIn';
+                      })()}
                     </div>
                   </div>
                 </div>
                 <div className="text-2xl font-bold text-green-600">
-                  {Math.max(getCurrentMonthInstagramLikes(), getCurrentMonthFacebookLikes()).toLocaleString()}
+                  {Math.max(getCurrentMonthInstagramLikes(), getCurrentMonthFacebookLikes(), getCurrentMonthLinkedInLikes()).toLocaleString()}
                 </div>
               </div>
               
@@ -204,7 +214,7 @@ export function DashboardView() {
                   </div>
                 </div>
                 <div className="text-2xl font-bold text-blue-600">
-                  {(getCurrentMonthInstagramLikes() + getCurrentMonthFacebookLikes() + (stats?.like_linkedin || 0)).toLocaleString()}
+                  {(getCurrentMonthInstagramLikes() + getCurrentMonthFacebookLikes() + getCurrentMonthLinkedInLikes()).toLocaleString()}
                 </div>
               </div>
               

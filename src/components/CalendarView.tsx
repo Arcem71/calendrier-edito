@@ -8,7 +8,9 @@ import { cancelScheduledPublication, schedulePublication } from '../utils/public
 
 interface CalendarViewProps {
   items: ContentItem[];
+  ideas?: any[];
   onUpdate: () => void;
+  onIdeaClick?: (ideaId: string) => void;
 }
 
 interface ImagePreviewProps {
@@ -60,7 +62,7 @@ const getPlatformClasses = (platform: Platform): string => {
   }
 };
 
-export function CalendarView({ items, onUpdate }: CalendarViewProps) {
+export function CalendarView({ items, ideas = [], onUpdate, onIdeaClick }: CalendarViewProps) {
   const [selectedItem, setSelectedItem] = useState<ContentItem | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -334,6 +336,25 @@ export function CalendarView({ items, onUpdate }: CalendarViewProps) {
   };
 
   const monthlyStats = getMonthlyStats();
+  
+  // Statistiques des idées pour ce mois
+  const getIdeasStats = () => {
+    const monthIdeas = ideas.filter((idea) => {
+      if (!idea.target_date) return false;
+      if (idea.status === 'generated' || idea.status === 'published') return false;
+      const ideaDate = new Date(idea.target_date);
+      return ideaDate.getMonth() === currentDate.getMonth() && 
+             ideaDate.getFullYear() === currentDate.getFullYear();
+    });
+    
+    return {
+      total: monthIdeas.length,
+      inProgress: monthIdeas.filter(idea => idea.status === 'in_progress').length,
+      generated: 0
+    };
+  };
+  
+  const ideasStats = getIdeasStats();
 
   return (
     <div className="bg-white rounded-lg shadow p-6">
@@ -346,7 +367,7 @@ export function CalendarView({ items, onUpdate }: CalendarViewProps) {
           <div>
             <h2 className="text-2xl font-bold text-gray-800">Calendrier éditorial</h2>
             <p className="text-sm text-gray-500">
-              {monthlyStats.total} publication{monthlyStats.total !== 1 ? 's' : ''} ce mois • {monthlyStats.published} publiée{monthlyStats.published !== 1 ? 's' : ''}
+              {monthlyStats.total} publication{monthlyStats.total !== 1 ? 's' : ''} • {ideasStats.total} idée{ideasStats.total !== 1 ? 's' : ''} ce mois
             </p>
           </div>
         </div>
@@ -363,6 +384,11 @@ export function CalendarView({ items, onUpdate }: CalendarViewProps) {
             <div className="px-2 py-1 bg-yellow-50 text-yellow-700 rounded-lg border border-yellow-200 text-sm">
               <span className="font-medium">{monthlyStats.pending}</span> En attente
             </div>
+            {ideasStats.total > 0 && (
+              <div className="px-2 py-1 bg-orange-50 text-orange-700 rounded-lg border border-orange-200 text-sm">
+                <span className="font-medium">{ideasStats.total}</span> Idées
+              </div>
+            )}
           </div>
           
           <div className="h-6 border-l border-gray-300"></div>
@@ -498,6 +524,15 @@ export function CalendarView({ items, onUpdate }: CalendarViewProps) {
                 const dayItems = date
                   ? getFilteredItems(items.filter((it) => new Date(it.date_brute).toDateString() === date.toDateString()))
                   : [];
+                  
+                // Filtrer les idées pour ce jour si elles ont une date cible
+                const dayIdeas = date
+                  ? ideas.filter((idea) => 
+                      idea.target_date && 
+                      new Date(idea.target_date).toDateString() === date.toDateString() &&
+                      idea.status !== 'generated'
+                    )
+                  : [];
                 const isDropTarget = dropTarget && date && dropTarget.toDateString() === date.toDateString();
                 const isToday = date?.toDateString() === new Date().toDateString();
                 const isWeekend = date && (date.getDay() === 0 || date.getDay() === 6);
@@ -532,16 +567,17 @@ export function CalendarView({ items, onUpdate }: CalendarViewProps) {
                           }`}>
                             {day}
                           </span>
-                          {dayItems.length > 0 && (
+                          {(dayItems.length + dayIdeas.length) > 0 && (
                             <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
-                              {dayItems.length}
+                              {dayItems.length + dayIdeas.length}
                             </span>
                           )}
                         </div>
                         
-                        {/* Publications */}
+                        {/* Publications et Idées */}
                         <div className="space-y-1.5 max-h-[100px] overflow-y-auto">
-                          {dayItems.slice(0, 3).map((item) => {
+                          {/* Publications */}
+                          {dayItems.slice(0, 2).map((item) => {
                             const images = normaliseImages(item.images);
                             return (
                               <div
@@ -617,10 +653,68 @@ export function CalendarView({ items, onUpdate }: CalendarViewProps) {
                             );
                           })}
                           
+                          {/* Idées */}
+                          {dayIdeas.slice(0, 3 - dayItems.slice(0, 2).length).map((idea) => (
+                            <div
+                              key={`idea-${idea.id}`}
+                              className="p-2 rounded-lg cursor-pointer transition-all duration-200 hover:scale-105 hover:shadow-sm bg-gradient-to-r from-yellow-100 to-orange-100 border-2 border-dashed border-yellow-300"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onIdeaClick && onIdeaClick(idea.id);
+                              }}
+                            >
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="text-xs font-medium truncate flex-1 pr-1 text-yellow-800">
+                                  💡 {idea.title || 'Idée sans titre'}
+                                </span>
+                                <div className="text-yellow-600">
+                                  <span className="text-xs">✨</span>
+                                </div>
+                              </div>
+                              
+                              <div className="flex items-center justify-between">
+                                {/* Plateformes cibles */}
+                                <div className="flex gap-1">
+                                  {(idea.target_platforms || []).slice(0, 3).map((p, idx) => {
+                                    const platform = p.toLowerCase();
+                                    let icon = '●';
+                                    if (platform.includes('instagram')) icon = '📷';
+                                    else if (platform.includes('facebook')) icon = '👥';
+                                    else if (platform.includes('linkedin')) icon = '💼';
+                                    else if (platform.includes('twitter')) icon = '🐦';
+                                    else if (platform.includes('youtube')) icon = '📺';
+                                    else if (platform.includes('tiktok')) icon = '🎵';
+                                    
+                                    return (
+                                      <span
+                                        key={idx}
+                                        className="text-xs text-yellow-700"
+                                        title={p}
+                                      >
+                                        {icon}
+                                      </span>
+                                    );
+                                  })}
+                                </div>
+                                
+                                {/* Statut de l'idée */}
+                                <div className="flex items-center gap-1">
+                                  <div className={`w-2 h-2 rounded-full ${
+                                    idea.status === 'idea' ? 'bg-blue-400' :
+                                    idea.status === 'in_progress' ? 'bg-orange-400' :
+                                    idea.status === 'generated' ? 'bg-purple-400' :
+                                    idea.status === 'published' ? 'bg-green-400' :
+                                    'bg-gray-400'
+                                  }`}></div>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                          
                           {/* Show more indicator */}
-                          {dayItems.length > 3 && (
+                          {(dayItems.length + dayIdeas.length) > 3 && (
                             <div className="text-xs text-gray-500 text-center py-1">
-                              +{dayItems.length - 3} autre{dayItems.length - 3 > 1 ? 's' : ''}
+                              +{(dayItems.length + dayIdeas.length) - 3} autre{((dayItems.length + dayIdeas.length) - 3) > 1 ? 's' : ''}
                             </div>
                           )}
                         </div>

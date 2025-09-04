@@ -23,6 +23,7 @@ import { ImageCell } from './database/ImageCell';
 import { StatusCell } from './database/StatusCell';
 import { PlatformsCell } from './database/PlatformsCell';
 import { EditableCell } from './database/EditableCell';
+import { InformationsCell } from './database/InformationsCell';
 import { TableHeader } from './database/TableHeader';
 import { AIAssistant } from './database/AIAssistant';
 import { ImagePreview } from './database/ImagePreview';
@@ -71,7 +72,7 @@ export function DatabaseView({ items, onUpdate }: DatabaseViewProps) {
   const [aiEditingField, setAiEditingField] = useState<'name' | 'description'>('name');
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [compactView, setCompactView] = useState(false);
+  const [compactView, setCompactView] = useState(true);
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [previewItem, setPreviewItem] = useState<ContentItem | null>(null);
   const [previewPlatform, setPreviewPlatform] = useState<Platform | null>(null);
@@ -1011,9 +1012,8 @@ export function DatabaseView({ items, onUpdate }: DatabaseViewProps) {
                       </td>
                       
                       <td className="px-6 py-5 max-w-xs">
-                        <EditableCell
+                        <InformationsCell
                           item={it}
-                          field="informations"
                           isEditing={editingCell?.id === it.id && editingCell?.field === 'informations'}
                           editingValue={editingCell?.value || ''}
                           onStartEdit={handleStartEditing}
@@ -1173,9 +1173,8 @@ export function DatabaseView({ items, onUpdate }: DatabaseViewProps) {
                               Informations
                             </label>
                             <div className="bg-gray-50 rounded-lg p-3">
-                              <EditableCell
+                              <InformationsCell
                                 item={it}
-                                field="informations"
                                 isEditing={editingCell?.id === it.id && editingCell?.field === 'informations'}
                                 editingValue={editingCell?.value || ''}
                                 onStartEdit={handleStartEditing}

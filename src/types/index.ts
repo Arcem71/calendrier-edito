@@ -1,7 +1,7 @@
 export type Status = 'Publiée' | 'En Attente de Validation' | 'Planifiée';
 export type Platform = 'Instagram' | 'Facebook' | 'Twitter' | 'LinkedIn' | 'TikTok' | 'YouTube' | 'Blog';
 export type Vote = 'up' | 'down' | null;
-export type ViewMode = 'calendar' | 'database' | 'dashboard' | 'ai' | 'prospection';
+export type ViewMode = 'calendar' | 'database' | 'dashboard' | 'ai' | 'prospection' | 'ideas';
 
 export interface ImageInfo {
   url: string;
